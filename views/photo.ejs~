@@ -14,12 +14,11 @@
 	    <H3>Street: <%=photo[0].address.street%><br>Building: <%=photo[0].address.building%><br>Zip Code: <%=photo[0].address.zipcode%><br>GPS: [<%=photo[0].address.coord%>]</H3>
             <H3>User: <%=photo[0].grades[0].user%><br>Score: <%=photo[0].grades[0].score%></H3>
             <H3>Owner: <%=photo[0].owner%></H3>
-	    <H3>Rating: </H3>
+	    <H3>Rating:<br> </H3>
             <H3>Restaurant ID: <%=photo[0].restaurant_id%></H3>
         </div>
-	<form action="/edit?_id=<%=photo[0].restaurant_id%>" method="get">
-	<br><input type="submit" value="Edit">
-	</form><br>
+	<form action="/rate?_id=<%=photo[0].restaurant_id%>" method="get"><input type="submit" value="Rate"></form>
+	<form action="/edit?_id=<%=photo[0].restaurant_id%>" method="get"><input type="submit" value="Edit"></form>
 	<form><input type="button" value="Back" onclick="history.go(-1)"></form>
     </body>
 </html>

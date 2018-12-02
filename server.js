@@ -122,6 +122,27 @@ var new_r = {};    // document to be inserted
 
 });
 
+app.get ('/rate',function(req,res){
+    res.render('rate.ejs', {_id:req.query._id});
+});
+
+app.post('/rate', function(req,res){
+var form = new formidable.IncomingForm();
+form.parse(req, function (err, fields) {
+	MongoClient.connect(mongourl, function(err,db){
+var new_b = {};    // document to be rated
+
+    new_b['score'] = fields.score;
+		assert.equal(err,null);
+		console.log('Connected to MongoDB\n');	
+    		ratingDocument(db,new_b,function(result){
+        	db.close();
+	});
+      });
+        res.redirect('/display'); return;	
+    });	
+});
+
 app.get('/edit',function(req,res){
 	console.log(JSON.stringify(req.query));
     res.render('edit.ejs', {_id:req.query._id});
@@ -135,7 +156,7 @@ console.log("Receive data:" + JSON.stringify(req.body));
 		assert.equal(err,null);
 		console.log('Connected to MongoDB\n');
 		var criteria = {};
-		criteria['restaurant_id'] = req.body.restaurant_id;
+		criteria['restaurant_id'] = req.body._id;
 		var newValues = {};
 		
 		
@@ -239,6 +260,14 @@ function insertDocument(db,r,callback) {
 	console.log(result);
     callback(result);
   });
+}
+
+function ratingDocument(db,b,callback){
+	db.collection('restaurant').insertOne(b,function(err,result){
+	assert.equal(err,null);
+	console.log("Rate succssfully!!");
+	callback(result);
+	});
 }
 
 function updateDocument(db,criteria,newValues,callback) {
