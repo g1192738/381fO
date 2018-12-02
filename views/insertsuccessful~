@@ -1,0 +1,8 @@
+<html>
+<title>Success insert</title>
+<body>
+<header><h1>Insert documents successfully</h1></header>
+<form action="/insertsuccessful" method="get" >
+</form>
+</body>
+</html>

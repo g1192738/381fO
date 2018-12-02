@@ -1,0 +1,26 @@
+<!DOCTYPE html>
+<html>
+    <head>
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <style> img {width: 100%;height: auto;}</style>
+    </head>
+    <link rel="stylesheet" href="https://www.w3schools.com/w3css/4/w3.css">
+    <body>
+        <div class="w3-container w3-green">
+            <H1>Name: <%=photo[0].name%></H1>
+	    <img src="data:<%=photo[0].photo_mimetype%>;base64, <%=photo[0].photo%>">
+	    <H3>Borough: <%=photo[0].borough%></H3>
+	    <H3>Cuisine: <%=photo[0].cuisine%></H3>
+	    <H3>Street: <%=photo[0].address.street%><br>Building: <%=photo[0].address.building%><br>Zip Code: <%=photo[0].address.zipcode%><br>GPS: [<%=photo[0].address.coord%>]</H3>
+            <H3>User: <%=photo[0].grades[0].user%><br>Score: <%=photo[0].grades[0].score%></H3>
+            <H3>Owner: <%=photo[0].owner%></H3>
+	    <H3>Rating: </H3>
+            <H3>Restaurant ID: <%=photo[0].restaurant_id%></H3>
+        </div>
+	<form action="/edit?_id=<%=photo[0].restaurant_id%>" method="get">
+	<br><input type="submit" value="Edit">
+	</form><br>
+	<form><input type="button" value="Back" onclick="history.go(-1)"></form>
+    </body>
+</html>
+
