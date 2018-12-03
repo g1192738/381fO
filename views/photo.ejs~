@@ -2,7 +2,19 @@
 <html>
     <head>
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <style> img {width: 100%;height: auto;}</style>
+	<meta charset="utf-8">
+        <style> img {width: 100%;height: auto;}
+      /* Always set the map height explicitly to define the size of the div
+       * element that contains the map. */
+      #map {
+        height: 100%;
+      }
+      /* Optional: Makes the sample page fill the window. */
+      html, body {
+        height: 100%;
+        margin: 0;
+        padding: 0;
+      }</style>
     </head>
     <link rel="stylesheet" href="https://www.w3schools.com/w3css/4/w3.css">
     <body>
@@ -12,12 +24,36 @@
 	    <H3>Borough: <%=photo[0].borough%></H3>
 	    <H3>Cuisine: <%=photo[0].cuisine%></H3>
 	    <H3>Street: <%=photo[0].address.street%><br>Building: <%=photo[0].address.building%><br>Zip Code: <%=photo[0].address.zipcode%><br>GPS: [<%=photo[0].address.coord%>]</H3>
-            <H3>User: <%=photo[0].grades[0].user%><br>Score: <%=photo[0].grades[0].score%></H3>
+            <% for (var key in photo[0].grades){ %>
+            <H3>User: <%=photo[0].grades[key].user%><br>Score: <%=photo[0].grades[key].score%></H3>
+            <%}%>
             <H3>Owner: <%=photo[0].owner%></H3>
-	    <H3>Rating: <%=photo[0].scores%><br> </H3>
             <H3>Restaurant ID: <%=photo[0].restaurant_id%></H3>
         </div>
-	<form action="/rate?_id=<%=photo[0].restaurant_id%>" method="get"><input type="submit" value="Rate"></form>
+	<div id="map"></div>
+    <script>
+
+      function initMap() {
+        var myLatLng = {lat: <%= photo[0].address.coord[0] %>, lng: <%= photo[0].address.coord[1]%>};
+
+        var map = new google.maps.Map(document.getElementById('map'), {
+          zoom: 18,
+          center: myLatLng
+        });
+
+        var marker = new google.maps.Marker({
+          position: myLatLng,
+          map: map,
+          title: 'Hello World!'
+        });
+      }
+    </script>
+    <script async defer
+    src="https://maps.googleapis.com/maps/api/js?key=AIzaSyARHGCtlq31JkXWr0MMa7AkzzgfpnJ3h6w&callback=initMap">
+    </script>
+
+	<a href=/remove?_id=<%=photo[0]._id%>>Remove</a>
+	<form action="/rate" method="get"><input type="hidden" name="_id" value="<%=photo[0].restaurant_id%>"><input type="submit" value="Rate"></form>
 	<form action="/edit" method="get">
 	<input type="hidden" name="_id" value="<%=photo[0].restaurant_id%>">
 	<br><input type="submit" value="Edit">
@@ -25,4 +61,12 @@
 	<form><input type="button" value="Back" onclick="history.go(-1)"></form>
     </body>
 </html>
+
+
+       
+  
+        
+  
+
+
 

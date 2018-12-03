@@ -152,18 +152,22 @@ app.post('/rate', function (req, res) {
   form.parse(req, function (err, fields) {
     MongoClient.connect(mongourl, function (err, db) {
       var new_b = {}; // document to be rated
+      new_b['score'] = fields.scores;
+      new_b['user'] = req.session.userid;
 
-      new_b['scores'] = fields.scores;
       assert.equal(err, null);
-      console.log('Connected to MongoDB\n');
-      ratingDocument(db, new_b, function (result) {
+      console.log('Rate POST Connected to MongoDB\n');
+      ratingDocument(db, {
+        data: new_b,
+        id: fields._id
+      }, function (result) {
         db.close();
       });
     });
-    
+
   });
-	res.redirect('/display');
-    return;
+  res.redirect('/display');
+  return;
 });
 
 app.get('/edit', function (req, res) {
@@ -217,28 +221,28 @@ app.post('/edit', function (req, res) {
               newValues[key] = fields[key];
               break;
             case 'street':
-		newValues[key] = fields[key];
-		address[key] = fields[key];
-		break;
+              newValues[key] = fields[key];
+              address[key] = fields[key];
+              break;
             case 'building':
-		newValues[key] = fields[key];
-		address[key] = fields[key];
-		break;
+              newValues[key] = fields[key];
+              address[key] = fields[key];
+              break;
             case 'zipcode':
-		newValues[key] = fields[key];
-		address[key] = fields[key];
-		break;
+              newValues[key] = fields[key];
+              address[key] = fields[key];
+              break;
             case 'lat':
-		newValues[key] = fields[key];
-		address[key] = fields[key];
-		break;
+              newValues[key] = fields[key];
+              address[key] = fields[key];
+              break;
             case 'lon':
-		newValues[key] = fields[key];
+              newValues[key] = fields[key];
               address[key] = fields[key];
               break;
             case 'user':
-		newValues[key] = fields[key];
-		break;
+              newValues[key] = fields[key];
+              break;
             case 'score':
               // newValues[key] = fields[key];
               db.collection('restaurants').updateOne(
@@ -301,29 +305,100 @@ app.get('/show', function (req, res) {
     findPhoto(db, criteria, function (photo) {
       db.close();
       console.log('Disconnected MongoDB');
-      console.log('Photo returned = ' + photo.length);
+      console.log('Photo returned = ' + JSON.stringify(photo));
       var image = new Buffer(photo[0].photo, 'base64');
-      var contentType = {};
-      contentType['Content-Type'] = photo[0].photo_mimetype;
-      console.log(contentType['Content-Type']);
-      if (contentType['Content-Type'] == "image/jpeg") {
+    //  var contentType = {};
+   //   contentType['Content-Type'] = photo[0].photo_mimetype;
+   //   console.log(contentType['Content-Type']);
+   //   if (contentType['Content-Type'] == "image/jpeg") {
         res.render('photo.ejs', {
           photo: photo
         });
-      } else {
-        res.set({
-          "Content-Type": "text/plain"
-        });
-        res.status(500).end("Not JPEG format!!!");
-      }
+      //} else {
+    //    res.set({
+      //    "Content-Type": "text/plain"
+     //   });
+      //  res.status(500).end("Not JPEG format!!!");
+      //}
+
     });
+  });
+});
+
+
+
+
+
+
+app.get('/remove', function(req,res) {
+
+  MongoClient.connect(mongourl, function(err,db) {
+    try {
+      assert.equal(err,null);
+    } catch (err) {
+      res.set({"Content-Type":"text/plain"});
+      res.status(500).end("MongoClient connect() failed!");
+    }      
+    console.log('Connected to MongoDB');
+    var criteria = {};
+    criteria['_id'] = ObjectID(req.query._id);
+    removeDocument(db,criteria, function(photo) {
+      db.close();
+
+      });
+
+ res.redirect('/display'); return;
+    
+  });
+});
+
+app.get('/api/restaurant/read/name/:rname',function(req,res){
+  var criteria = {};
+  criteria['name'] = req.params.rname;
+  MongoClient.connect(mongourl, function(err, db) {
+    assert.equal(err,null);
+    console.log('Connected to MongoDB\n');
+    db.collection('restaurants').findOne(criteria, function(err, result) {
+    if(result == null){
+      res.status(200).json({}).end();
+    }else {
+      console.log(result);
+      res.status(200).json(result).end();
+    }
+    });
+    db.close();
+  });
+});
+
+app.get('/api/restaurant/read/borough/:borough',function(req,res){
+  var criteria = {};
+  criteria['borough'] = req.params.borough;
+  MongoClient.connect(mongourl, function(err, db) {
+    assert.equal(err,null);
+    console.log('Connected to MongoDB\n');
+    showBorough(db, criteria, function(restaurant){
+      res.render("searchResult.ejs",{restaurant:restaurant});
+    db.close();
+  });
+  });
+});
+
+app.get('/api/restaurant/read/cuisine/:cuisine',function(req,res){
+  var criteria = {};
+  criteria['cuisine'] = req.params.cuisine;
+  MongoClient.connect(mongourl, function(err, db) {
+    assert.equal(err,null);
+    console.log('Connected to MongoDB\n');
+    showCuisine(db, criteria, function(restaurant){
+      res.render("searchResult.ejs",{restaurant:restaurant});
+    db.close();
+  });
   });
 });
 
 app.get('*', function (req, res) {
   res.redirect('/login');
 });
-
 
 
 
@@ -337,15 +412,30 @@ function insertDocument(db, r, callback) {
 }
 
 function ratingDocument(db, b, callback) {
-  db.collection('restaurant').insertOne(b, function (err, result) {
-    assert.equal(err, null);
-    console.log("Rate succssfully!!");
-    callback(result);
+  console.log("Rating Document get data: " + JSON.stringify(b) + "\n");
+  db.collection('restaurants').find({
+    'grades.user': b.data.user,
+    'restaurant_id': b.id
+  }).toArray(function (result) {
+    console.log("Rating Document: " + JSON.stringify(result) + "\n");
+    if (result) {
+      return;
+    } else {
+      db.collection('restaurants').updateOne({
+        'restaurant_id': b.id
+      }, {
+        $push: {
+          "grades": b.data
+        }
+      }, function (err, results) {
+        assert.equal(err, null);
+        console.log("Rating Document Update: " + JSON.stringify(results) + "\n");
+      });
+    }
   });
 }
 
 function updateDocument(db, criteria, newValues, callback) {
-db.collection('restaurants').find({owner:userid, restaurant_id:id});
   db.collection('restaurants').updateOne(
     criteria, {
       $set: newValues
@@ -371,6 +461,13 @@ function findPhoto(db, criteria, callback) {
   });
 }
 
-
+function removeDocument(db,criteria,callback) {
+  db.collection('restaurants').remove(criteria,function(err,result) {
+    assert.equal(err,null);
+    console.log("remove successful!");
+    console.log(result);
+    callback(result);
+  });
+}
 
 app.listen(process.env.PORT || 8099);
