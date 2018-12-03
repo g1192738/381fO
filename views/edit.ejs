@@ -2,7 +2,7 @@
 <title>Update your document</title>
 <body>
 <header><h1>Modify your document Here!!</h1></header>
-	<form action="/edit" method="post">
+	<form action="/edit" method="post" enctype="multipart/form-data">
 	<input type="hidden" name="_id" value="<%=_id%>"><br>
 	<br>Name: *<br><input type="text" name="name" required><br>
     	<br>Borough: <br><input type="text" name="borough"><br>

@@ -13,278 +13,356 @@ var mongourl = 'mongodb://g1192738:_Bblove630244@ds149672.mlab.com:49672/g119273
 app.set('view engine', 'ejs');
 
 
-var users = new Array(
-    {userid: 'developer', password: 'developer'},
-    {userid: 'guest', password: 'guest'}
-);
+var users = new Array({
+  userid: 'developer',
+  password: 'developer'
+}, {
+  userid: 'guest',
+  password: 'guest'
+});
 
 
 app.use(session({
   name: 'session',
-  keys: ['userid','authenticated']
+  keys: ['userid', 'authenticated']
 }));
-app.use(bodyParser.urlencoded({ extended: false }));
+app.use(bodyParser.urlencoded({
+  extended: false
+}));
 app.use(bodyParser.json());
 
-app.get('/',function(req,res) {
-    console.log(req.session);
-    if (!req.session.authenticated) {
-        res.redirect('/login');
-    } else {
-        res.status(200);
-        
+app.get('/', function (req, res) {
+  console.log(req.session);
+  if (!req.session.authenticated) {
+    res.redirect('/login');
+  } else {
+    res.status(200);
+
+  }
+});
+
+app.get('/login', function (req, res) {
+  res.render('login');
+});
+
+app.post('/login', function (req, res) {
+  for (var i = 0; i < users.length; i++) {
+    if (users[i].userid == req.body.userid &&
+      users[i].password == req.body.password) {
+      req.session.authenticated = true;
+      req.session.userid = users[i].userid;
+      console.log(req.session);
+      res.redirect('/display');
+      return;
     }
+  }
+
 });
 
-app.get('/login',function(req,res){
-    res.render('login');
+
+app.get('/display', function (req, res) {
+  if (req.session.authenticated == true) {
+    MongoClient.connect(mongourl, function (err, db) {
+      try {
+        assert.equal(err, null);
+      } catch (err) {
+        res.set({
+          "Content-Type": "text/plain"
+        });
+        res.status(500).end("MongoClient connect() failed!");
+      }
+      console.log('Connected to MongoDB');
+      findPhoto(db, {}, function (restaurants) {
+        db.close();
+        console.log('Disconnected MongoDB');
+        res.render("list.ejs", {
+          restaurants: restaurants
+        });
+      });
+    });
+  }
 });
 
-app.post('/login',function(req,res) {
-    for (var i=0; i<users.length; i++) {
-        if (users[i].userid == req.body.userid &&
-            users[i].password == req.body.password) {
-            req.session.authenticated = true;
-            req.session.userid = users[i].userid;
-            console.log(req.session);
-res.redirect('/display'); return;
+
+app.get('/logout', function (req, res) {
+  req.session = null;
+  console.log('logout successfully!');
+  res.redirect('/');
+});
+
+app.get('/create', function (req, res) {
+
+  res.render('create');
+
+});
+
+app.post('/create', function (req, res) {
+  var form = new formidable.IncomingForm();
+  form.parse(req, function (err, fields, files) {
+    var filename = files.filetoupload.path;
+    if (files.filetoupload.type) {
+      var mimetype = files.filetoupload.type;
+    }
+    fs.readFile(filename, function (err, data) {
+      MongoClient.connect(mongourl, function (err, db) {
+        var new_r = {}; // document to be inserted
+        new_r['restaurant_id'] = fields.restaurant_id;
+        new_r['name'] = fields.name;
+        new_r['borough'] = fields.borough;
+        new_r['cuisine'] = fields.cuisine;
+        if (data) {
+          new_r['photo'] = new Buffer(data).toString('base64');
+          new_r['photo_mimetype'] = files.filetoupload.type;
         }
-    }
+        new_r['address'] = {
+          street: fields.street,
+          building: fields.building,
+          zipcode: fields.zipcode,
+          coord: [fields.lat, fields.lon]
+        };
+        new_r['grades'] = [{
+          user: fields.user,
+          score: fields.score
+        }];
+        new_r['owner'] = req.session.userid;
+
+
+        assert.equal(err, null);
+        console.log('Connected to MongoDB\n');
+        insertDocument(db, new_r, function (result) {
+          db.close();
+          req.session.userid = fields.userid;
+        });
+      });
+    });
+    res.redirect('/display');
+    return;
+  });
+
+});
+
+app.get('/rate', function (req, res) {
+  res.render('rate.ejs', {
+    _id: req.query._id
+  });
+});
+
+app.post('/rate', function (req, res) {
+  var form = new formidable.IncomingForm();
+  form.parse(req, function (err, fields) {
+    MongoClient.connect(mongourl, function (err, db) {
+      var new_b = {}; // document to be rated
+
+      new_b['scores'] = fields.scores;
+      assert.equal(err, null);
+      console.log('Connected to MongoDB\n');
+      ratingDocument(db, new_b, function (result) {
+        db.close();
+      });
+    });
     
+  });
+	res.redirect('/display');
+    return;
+});
+
+app.get('/edit', function (req, res) {
+  console.log(JSON.stringify(req.query));
+  res.render('edit.ejs', {
+    _id: req.query._id
+  });
 });
 
 
-app.get('/display', function(req,res) {
-	if(req.session.authenticated == true){
-  MongoClient.connect(mongourl, function(err,db) {
+app.post('/edit', function (req, res) {
+  console.log('About to update ');
+  var form = new formidable.IncomingForm();
+  form.parse(req, function (err, fields, files) {
+    console.log("Receive data:" + JSON.stringify(fields));
+    console.log("Receive data files:" + JSON.stringify(files));
+    MongoClient.connect(mongourl, function (err, db) {
+      assert.equal(err, null);
+      console.log('Connected to MongoDB\n');
+      var criteria = {};
+      criteria['restaurant_id'] = fields._id;
+      var newValues = {};
+      if (files.filetoupload.type) {
+        var mimetype = files.filetoupload.type;
+        newValues['mimetype'] = mimetype;
+      }
+      fs.readFile(files.filetoupload.path, function (err, data) {
+        assert.equal(err, null);
+        let photo = new Buffer(data).toString('base64');
+        console.log("filetoupload mimetype: " + mimetype);
+        console.log("filetoupload: " + JSON.stringify(photo + "\n"))
+        newValues['photo'] = photo;
+
+
+        var address = {};
+        for (var key in fields) {
+          if (key == "_id") {
+            continue;
+          }
+          switch (key) {
+            case 'restaurant_id':
+              newValues[key] = fields[key];
+              break;
+            case 'name':
+              newValues[key] = fields[key];
+              break;
+            case 'borough':
+              newValues[key] = fields[key];
+              break;
+            case 'cuisine':
+              newValues[key] = fields[key];
+              break;
+            case 'street':
+		newValues[key] = fields[key];
+		address[key] = fields[key];
+		break;
+            case 'building':
+		newValues[key] = fields[key];
+		address[key] = fields[key];
+		break;
+            case 'zipcode':
+		newValues[key] = fields[key];
+		address[key] = fields[key];
+		break;
+            case 'lat':
+		newValues[key] = fields[key];
+		address[key] = fields[key];
+		break;
+            case 'lon':
+		newValues[key] = fields[key];
+              address[key] = fields[key];
+              break;
+            case 'user':
+		newValues[key] = fields[key];
+		break;
+            case 'score':
+              // newValues[key] = fields[key];
+              db.collection('restaurants').updateOne(
+                criteria, {
+                  $push: {
+                    'grades': {
+                      user: req.session.userid,
+                      score: fields[key]
+                    }
+                  }
+                },
+                function (err, result) {
+                  assert.equal(err, null);
+                  console.log("update was successfully");
+                  console.log(result);
+                });
+              break;
+            case 'owner':
+              newValues[key] = fields[key]
+              break;
+              // case 'filetoupload':
+              //   //newValues[key] = req.body[key];
+
+              //   break;
+            default:
+              newValues[key] = fields[key];
+              break;
+          }
+        }
+        if (address.lenght > 0) {
+          newValues['address'] = address;
+        }
+        if (Object.keys(newValues).length < 1) {
+          return;
+        }
+        console.log('Preparing update: ' + JSON.stringify(newValues));
+        console.log("Criteria: " + JSON.stringify(criteria));
+        updateDocument(db, criteria, newValues, function (result) {
+          db.close();
+        });
+      });
+      res.redirect('/display');
+      return;
+    });
+  });
+});
+app.get('/show', function (req, res) {
+  MongoClient.connect(mongourl, function (err, db) {
     try {
-      assert.equal(err,null);
+      assert.equal(err, null);
     } catch (err) {
-      res.set({"Content-Type":"text/plain"});
+      res.set({
+        "Content-Type": "text/plain"
+      });
       res.status(500).end("MongoClient connect() failed!");
     }
-    console.log('Connected to MongoDB');
-    findPhoto(db,{},function(restaurants) {
-      db.close();
-      console.log('Disconnected MongoDB');
-      res.render("list.ejs",{restaurants:restaurants});
-    });
-});
-}
-});
-
-
-app.get('/logout', function(req,res){
-req.session = null;
-console.log('logout successfully!');
-res.redirect('/');
-});
-
-app.get('/create',function(req,res){
-	
-    res.render('create');
-
-});
-
-app.post('/create', function(req,res){
-var form = new formidable.IncomingForm();
-form.parse(req, function (err, fields, files) {
-var filename = files.filetoupload.path;
-if (files.filetoupload.type) {
-	var mimetype = files.filetoupload.type;
-}
-fs.readFile(filename, function(err,data) {
-	MongoClient.connect(mongourl, function(err,db){
-var new_r = {};    // document to be inserted
-    new_r['restaurant_id'] = fields.restaurant_id;
-    new_r['name'] = fields.name;
-    new_r['borough'] = fields.borough;
-    new_r['cuisine'] = fields.cuisine;
-    if(data){
-        new_r['photo'] = new Buffer(data).toString('base64');
-        new_r['photo_mimetype'] = files.filetoupload.type;
-    }
-        new_r['address'] = {street: fields.street, building: fields.building, zipcode: fields.zipcode, coord: [fields.lat, fields.lon]};
-    new_r['grades'] = [{user: fields.user, score: fields.score}];
-    new_r['owner'] = req.session.userid;
-	
-      
-		assert.equal(err,null);
-		console.log('Connected to MongoDB\n');	
-    		insertDocument(db,new_r,function(result){
-        	db.close();
-        	req.session.userid = fields.userid;
-	});
-      });
-});
-        	res.redirect('/display'); return;
-    });
-
-});
-
-app.get ('/rate',function(req,res){
-    res.render('rate.ejs', {_id:req.query._id});
-});
-
-app.post('/rate', function(req,res){
-var form = new formidable.IncomingForm();
-form.parse(req, function (err, fields) {
-	MongoClient.connect(mongourl, function(err,db){
-var new_b = {};    // document to be rated
-
-    new_b['score'] = fields.score;
-		assert.equal(err,null);
-		console.log('Connected to MongoDB\n');	
-    		ratingDocument(db,new_b,function(result){
-        	db.close();
-	});
-      });
-        res.redirect('/display'); return;	
-    });	
-});
-
-app.get('/edit',function(req,res){
-	console.log(JSON.stringify(req.query));
-    res.render('edit.ejs', {_id:req.query._id});
-});
-
-
-app.post('/edit', function(req,res){
-console.log('About to update ');
-console.log("Receive data:" + JSON.stringify(req.body));
-	MongoClient.connect(mongourl,function(err,db) {
-		assert.equal(err,null);
-		console.log('Connected to MongoDB\n');
-		var criteria = {};
-		criteria['restaurant_id'] = req.body._id;
-		var newValues = {};
-		
-		
-		var address = {};
-		for (var key in req.body) {
-			if (key == "_id") {
-				continue;
-			}
-			switch(key) {
-				case 'restaurant_id':
-					newValues[key] = req.body[key];
-					break;
-				case 'name':
-					newValues[key] = req.body[key];
-					break;
-				case 'borough':
-					newValues[key] = req.body[key];
-					break;
-				case 'cuisine': 
-					newValues[key] = req.body[key];
-					break;
-				case 'street':
-				case 'building':
-				case 'zipcode':
-				case 'lat':
-				case 'lon':
-					address[key] = req.body[key];
-					break;
-				case 'user':
-				case 'score':
-					newValues[key] = req.body[key];
-					break;
-				case 'owner':
-					newValues[key] = req.body[key]
-					break;
-				case 'filetoupload':
-					newValues[key] = req.body[key];
-					break;
-				default:
-					newValues[key] = req.body[key];	
-					break;
-			}
-		}
-		if (address.lenght > 0) {
-			newValues['address'] = address;
-		}
-		if (Object.keys(newValues).length<1)
-		{
-			return;
-		}
-		console.log('Preparing update: ' + JSON.stringify(newValues));
-		console.log("Criteria: "+ JSON.stringify(criteria));
-		updateDocument(db,criteria,newValues,function(result) {
-			db.close();			
-		});
-	});
-	res.redirect('/display'); return;
-});
-
-
-app.get('/show', function(req,res) {
-  MongoClient.connect(mongourl, function(err,db) {
-    try {
-      assert.equal(err,null);
-    } catch (err) {
-      res.set({"Content-Type":"text/plain"});
-      res.status(500).end("MongoClient connect() failed!");
-    }      
     console.log('Connected to MongoDB');
     var criteria = {};
     criteria['_id'] = ObjectID(req.query._id);
-    findPhoto(db,criteria, function(photo) {
+    findPhoto(db, criteria, function (photo) {
       db.close();
       console.log('Disconnected MongoDB');
       console.log('Photo returned = ' + photo.length);
-      var image = new Buffer(photo[0].photo,'base64');        
+      var image = new Buffer(photo[0].photo, 'base64');
       var contentType = {};
       contentType['Content-Type'] = photo[0].photo_mimetype;
       console.log(contentType['Content-Type']);
       if (contentType['Content-Type'] == "image/jpeg") {
-        res.render('photo.ejs',{photo:photo});
+        res.render('photo.ejs', {
+          photo: photo
+        });
       } else {
-        res.set({"Content-Type":"text/plain"});
-        res.status(500).end("Not JPEG format!!!");  
+        res.set({
+          "Content-Type": "text/plain"
+        });
+        res.status(500).end("Not JPEG format!!!");
       }
     });
   });
 });
 
-app.get('*', function(req,res) {
+app.get('*', function (req, res) {
   res.redirect('/login');
 });
 
 
 
 
-function insertDocument(db,r,callback) {
-  db.collection('restaurants').insertOne(r,function(err,result) {
-    assert.equal(err,null);
+function insertDocument(db, r, callback) {
+  db.collection('restaurants').insertOne(r, function (err, result) {
+    assert.equal(err, null);
     console.log("insert was successful!");
-	console.log(result);
+    console.log(result);
     callback(result);
   });
 }
 
-function ratingDocument(db,b,callback){
-	db.collection('restaurant').insertOne(b,function(err,result){
-	assert.equal(err,null);
-	console.log("Rate succssfully!!");
-	callback(result);
-	});
+function ratingDocument(db, b, callback) {
+  db.collection('restaurant').insertOne(b, function (err, result) {
+    assert.equal(err, null);
+    console.log("Rate succssfully!!");
+    callback(result);
+  });
 }
 
-function updateDocument(db,criteria,newValues,callback) {
-	db.collection('restaurants').updateOne(
-		criteria,{$set: newValues},function(err,result) {
-			assert.equal(err,null);
-			console.log("update was successfully");
-			console.log(result);
-			callback(result);
-	});
+function updateDocument(db, criteria, newValues, callback) {
+db.collection('restaurants').find({owner:userid, restaurant_id:id});
+  db.collection('restaurants').updateOne(
+    criteria, {
+      $set: newValues
+    },
+    function (err, result) {
+      assert.equal(err, null);
+      console.log("update was successfully");
+      console.log(result);
+      callback(result);
+    });
 }
 
-function findPhoto(db,criteria,callback) {
+function findPhoto(db, criteria, callback) {
   var cursor = db.collection("restaurants").find(criteria);
   var photos = [];
-  cursor.each(function(err,doc) {
-    assert.equal(err,null);
+  cursor.each(function (err, doc) {
+    assert.equal(err, null);
     if (doc != null) {
       photos.push(doc);
     } else {
@@ -296,4 +374,3 @@ function findPhoto(db,criteria,callback) {
 
 
 app.listen(process.env.PORT || 8099);
-
